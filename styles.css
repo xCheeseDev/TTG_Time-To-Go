@@ -107,6 +107,7 @@ html, body {
   position: relative;
   transform: scale(var(--vscale, 1));
   transform-origin: center center;
+  transition: transform 0.25s ease; /* glide with the map's zoom animation */
 }
 .vehicle img {
   display: block;

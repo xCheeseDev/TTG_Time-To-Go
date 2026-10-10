@@ -251,7 +251,10 @@ function initMap() {
   renderStopMarkers();
   initVehicleLayer();
   updateVehicleScale();
-  map.on("zoomend", updateVehicleScale);
+  // zoomanim carries the target zoom, so icons resize *during* the zoom
+  // animation (in sync with the map); zoomend covers non-animated zooms.
+  map.on("zoomanim", (e) => updateVehicleScale(e.zoom));
+  map.on("zoomend", () => updateVehicleScale());
   locateUser(false);
 
   document.getElementById("locateBtn").addEventListener("click", () => locateUser(true));
@@ -391,9 +394,10 @@ function vehicleIcon(routeId, mode) {
 const VEHICLE_REF_ZOOM = 13;
 const VEHICLE_MIN_SCALE = 0.25; // floor so they stay tappable at wide zooms
 
-function updateVehicleScale() {
+function updateVehicleScale(zoom) {
   if (!map) return;
-  const s = Math.min(1, Math.max(VEHICLE_MIN_SCALE, Math.pow(2, map.getZoom() - VEHICLE_REF_ZOOM)));
+  const z = typeof zoom === "number" ? zoom : map.getZoom();
+  const s = Math.min(1, Math.max(VEHICLE_MIN_SCALE, Math.pow(2, z - VEHICLE_REF_ZOOM)));
   document.getElementById("map").style.setProperty("--vscale", s.toFixed(3));
 }
 
