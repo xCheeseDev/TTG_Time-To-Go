@@ -394,15 +394,13 @@ function vehicleIcon(routeId, mode) {
 // (the max — they never grow past it), halving with each zoom level out.
 const VEHICLE_REF_ZOOM = 13;
 const VEHICLE_MIN_SCALE = 0.25; // floor so they stay tappable at wide zooms
-const VEHICLE_MIN_ZOOM = 12; // icons only appear at this zoom or closer
+
 function updateVehicleScale(zoom) {
   if (!map) return;
   const z = typeof zoom === "number" ? zoom : map.getZoom();
   const s = Math.min(1, Math.max(VEHICLE_MIN_SCALE, Math.pow(2, z - VEHICLE_REF_ZOOM)));
   document.getElementById("map").style.setProperty("--vscale", s.toFixed(3));
-  applyVehicleVisibility(z); // re-check zoom visibility too
 }
-
 
 function spawnFleet() {
   // routeId, how many vehicles, cruising speed (m/s)
@@ -478,12 +476,14 @@ function renderVehicles() {
   if (follow.vehicle) {
     checkCameraHandoff(now);
     drawFollowFrame(now);
- function applyVehicleVisibility(zoom) {
+  }
+  requestAnimationFrame(renderVehicles);
+}
+
+function applyVehicleVisibility() {
   if (!map) return;
-  const z = typeof zoom === "number" ? zoom : map.getZoom();
-  const zoomOk = z >= VEHICLE_MIN_ZOOM;
   fleet.forEach((v) => {
-    const show = !!vehicleModes[v.mode] && zoomOk;
+    const show = !!vehicleModes[v.mode];
     const onMap = map.hasLayer(v.marker);
     if (show && !onMap) v.marker.addTo(map);
     if (!show && onMap) map.removeLayer(v.marker);
@@ -491,7 +491,7 @@ function renderVehicles() {
   if (follow.vehicle && !vehicleModes[follow.vehicle.mode]) closeFollowCard();
 }
 
-
+function initVehicleLayer() {
   spawnFleet();
   pollVehicleFeed(); // first real fix immediately so nothing sits still
   preloadSprites();
