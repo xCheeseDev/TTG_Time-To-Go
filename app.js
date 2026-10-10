@@ -250,6 +250,8 @@ function initMap() {
 
   renderStopMarkers();
   initVehicleLayer();
+  updateVehicleScale();
+  map.on("zoomend", updateVehicleScale);
   locateUser(false);
 
   document.getElementById("locateBtn").addEventListener("click", () => locateUser(true));
@@ -377,11 +379,22 @@ function vehicleIcon(routeId, mode) {
   const cfg = VEHICLE_ICON[mode] || VEHICLE_ICON.bus;
   return L.divIcon({
     className: "vehicle",
-    html: `<img src="${cfg.src()}" alt="${mode}" style="width:${cfg.size[0]}px;height:${cfg.size[1]}px">` +
-          `<span class="vehicle-badge">${routeId}</span>`,
+    html: `<div class="vehicle-inner"><img src="${cfg.src()}" alt="${mode}" style="width:${cfg.size[0]}px;height:${cfg.size[1]}px">` +
+          `<span class="vehicle-badge">${routeId}</span></div>`,
     iconSize: [cfg.size[0], cfg.size[1]],
     iconAnchor: [cfg.size[0] / 2, cfg.size[1] / 2],
   });
+}
+
+// Vehicle icons scale with the map zoom: full size at VEHICLE_REF_ZOOM
+// (the max — they never grow past it), halving with each zoom level out.
+const VEHICLE_REF_ZOOM = 13;
+const VEHICLE_MIN_SCALE = 0.25; // floor so they stay tappable at wide zooms
+
+function updateVehicleScale() {
+  if (!map) return;
+  const s = Math.min(1, Math.max(VEHICLE_MIN_SCALE, Math.pow(2, map.getZoom() - VEHICLE_REF_ZOOM)));
+  document.getElementById("map").style.setProperty("--vscale", s.toFixed(3));
 }
 
 function spawnFleet() {

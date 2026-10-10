@@ -101,8 +101,13 @@ html, body {
 }
 .fab:hover { background: #f2f7f3; }
 
-/* ---- live vehicle markers ---- */
+/* ---- live vehicle markers (zoom-scaled via --vscale on #map) ---- */
 .vehicle { position: relative; }
+.vehicle-inner {
+  position: relative;
+  transform: scale(var(--vscale, 1));
+  transform-origin: center center;
+}
 .vehicle img {
   display: block;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
