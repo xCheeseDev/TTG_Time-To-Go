@@ -13,13 +13,11 @@ Map-first, Google-Maps-style: a full-screen interactive map centered on your loc
 - **Live cameras** — where a transit agency exposes stop/station cameras, the feed appears synced to your stop.
 - **LIVE vehicle cameras** — tap any vehicle icon to open a live follow card: the app scours the transit system's traffic cameras, shows the nearest one's feed, and hands off camera-to-camera as the vehicle drives (with a "switching camera…" flash). Demo feeds are simulated on canvas and watermarked SIMULATED FEED; a real agency plugs stream URLs into `getTrafficCameras()`.
 
+- **My routes** — save named trips (Work → Home, Home → Mall…), one-tap load, and per-route watchers that alert you (banner + voice) when it's time to leave for that specific ride.
+
 ## Transit adapters
 
 Every city plugs in through the `TRANSIT_SYSTEMS` registry in `app.js`: routes with a `mode` (`bus`, `subway`, `train`, `tram`) and a `path` (the polyline the vehicle icons follow), stops with `lat`/`lng`, a `getArrivals(stopId)` implementation (most agencies publish GTFS-realtime), an optional `getCameraUrl(stopId)`, and a `getTrafficCameras()` returning `[{id, name, lat, lng}]` for the live-follow handoff. To make the vehicle icons real, replace the simulated `pollVehicleFeed()` with your agency's vehicle-positions feed — the interpolation layer consumes plain `{lat, lng, t}` fixes, so it works identically on real data. The countdown, voice alerts, map markers, and UI work unchanged for every system you add. A commented Transport-for-London example is included.
-
-## Transit adapters
-
-Every city plugs in through the `TRANSIT_SYSTEMS` registry in `app.js`: routes with a `mode` (`bus`, `subway`, `train`), stops with `lat`/`lng`, a `getArrivals(stopId)` implementation (most agencies publish GTFS-realtime), and an optional `getCameraUrl(stopId)`. The countdown, voice alerts, map markers, and UI work unchanged for every system you add. A commented Transport-for-London example is included.
 
 ## Run it
 
@@ -32,4 +30,4 @@ python3 -m http.server 8000
 
 ## Status
 
-v4. Map-first UI with live vehicle icons, a transport-type filter, and tap-to-watch camera follow with automatic camera handoff. Arrival, vehicle-position, and camera data is simulated until real transit feeds are plugged in. Next: wire a real GTFS-realtime feed for your city.
+v5. Map-first UI with live vehicle icons, a transport-type filter, tap-to-watch camera follow with automatic camera handoff, and saved routes with leave-time watchers. Arrival, vehicle-position, and camera data is simulated until real transit feeds are plugged in. Next: wire a real GTFS-realtime feed for your city.

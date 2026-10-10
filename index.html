@@ -78,6 +78,19 @@
         <button id="demoBtn" class="secondary">Demo: 1 min closer</button>
       </section>
 
+      <section class="card" id="myRoutes">
+        <h2>My routes</h2>
+        <div class="route-save-row">
+          <input type="text" id="routeName" placeholder="Name this trip — e.g. Work → Home" maxlength="40" autocomplete="off">
+          <button id="saveRouteBtn">Save</button>
+        </div>
+        <label class="watch-default">Alert me
+          <input type="number" id="watchMinutes" min="1" max="60" value="10">
+          min before I need to leave
+        </label>
+        <div id="routesList"></div>
+      </section>
+
       <section class="card" id="videoFeed">
         <h2>Live stop camera</h2>
         <div id="cameraBox" class="camera-placeholder">
@@ -86,8 +99,14 @@
         </div>
       </section>
 
-      <p class="small muted">Map data © OpenStreetMap contributors · TTG v4 — arrival + vehicle data is simulated until real transit feeds are plugged in.</p>
+      <p class="small muted">Map data © OpenStreetMap contributors · TTG v5 — arrival + vehicle data is simulated until real transit feeds are plugged in.</p>
     </div>
+  </div>
+
+  <!-- Watcher alert banner -->
+  <div id="watchBanner" class="watch-banner" hidden>
+    <span id="watchBannerText"></span>
+    <button id="watchBannerClose" aria-label="Dismiss">✕</button>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>

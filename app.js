@@ -1,5 +1,5 @@
 // ============================================================
-// TTG — Time To Go (v4: map-first + live vehicles + camera follow)
+// TTG — Time To Go (v5: map-first + live vehicles + camera follow + saved routes)
 //
 // PURPOSE:
 //   Show you the incoming bus or train you need to take, verbally
@@ -175,6 +175,7 @@ async function refreshArrivals() {
     state.arrivals = [];
   }
   tick();
+  checkWatchers();
 }
 
 // ---------------- main loop ----------------
@@ -703,6 +704,166 @@ function initFollowCard() {
   document.getElementById("followClose").addEventListener("click", closeFollowCard);
 }
 
+// ---------------- saved routes + watchers (v5) ----------------
+// Name and save trips ("Work → Home", "Home → Mall") for one-tap loading,
+// and "watch" a specific route: TTG alerts you (banner + voice) when it's
+// time to leave for that ride, even if you're looking at another trip.
+let savedRoutes = (() => {
+  try { return JSON.parse(localStorage.getItem("ttg-routes")) || []; }
+  catch (e) { return []; }
+})();
+
+function persistRoutes() {
+  try { localStorage.setItem("ttg-routes", JSON.stringify(savedRoutes)); } catch (e) {}
+}
+
+function routeSummary(r) {
+  const sys = TRANSIT_SYSTEMS.find((s) => s.id === r.systemId);
+  if (!sys) return "—";
+  const route = sys.routes.find((x) => x.id === r.routeId);
+  const stop = sys.stops.find((x) => x.id === r.stopId);
+  const icon = route ? (MODE_ICON[route.mode] || "🚌") : "🚌";
+  return `${icon} ${route ? route.name : r.routeId} · ${stop ? stop.name : ""} · ${r.walkMinutes} min walk`;
+}
+
+function renderRoutes() {
+  const list = document.getElementById("routesList");
+  if (!savedRoutes.length) {
+    list.innerHTML = `<p class="muted small">No saved routes yet — set up a trip above and save it.</p>`;
+    return;
+  }
+  list.innerHTML = "";
+  savedRoutes.forEach((r) => {
+    const div = document.createElement("div");
+    div.className = "route-item";
+    div.innerHTML = `
+      <div class="route-item-main"><b></b><span class="muted small"></span></div>
+      <div class="route-item-actions">
+        <button data-act="load">Load</button>
+        <button data-act="watch" aria-pressed="${!!r.watch}">Watch</button>
+        <button data-act="del" class="danger" aria-label="Delete route">✕</button>
+      </div>`;
+    div.querySelector("b").textContent = r.name;
+    div.querySelector("span").textContent =
+      routeSummary(r) + (r.watch ? ` · 👀 alerts ${r.watchMinutes} min before` : "");
+    div.querySelectorAll("button").forEach((btn) =>
+      btn.addEventListener("click", () => routeAction(r.id, btn.dataset.act)));
+    list.appendChild(div);
+  });
+}
+
+function routeAction(id, act) {
+  const r = savedRoutes.find((x) => x.id === id);
+  if (!r) return;
+  if (act === "del") {
+    savedRoutes = savedRoutes.filter((x) => x.id !== id);
+  } else if (act === "watch") {
+    if (r.watch) {
+      r.watch = false;
+    } else {
+      r.watch = true;
+      r.watchMinutes = Math.max(1, parseInt(document.getElementById("watchMinutes").value, 10) || 10);
+      r.alertedKey = null;
+    }
+  } else if (act === "load") {
+    loadRoute(r);
+    return;
+  }
+  persistRoutes();
+  renderRoutes();
+}
+
+function loadRoute(r) {
+  const sys = TRANSIT_SYSTEMS.find((s) => s.id === r.systemId);
+  if (!sys) return;
+  state.systemId = r.systemId;
+  document.getElementById("systemSelect").value = r.systemId;
+  fillRoutes();
+  fillStops();
+  state.routeId = r.routeId;
+  document.getElementById("routeSelect").value = r.routeId;
+  state.walkMinutes = r.walkMinutes;
+  document.getElementById("walkMinutes").value = r.walkMinutes;
+  state.said = {};
+  selectStop(r.stopId, true); // refreshes arrivals + countdown too
+}
+
+function initRoutes() {
+  renderRoutes();
+  document.getElementById("saveRouteBtn").addEventListener("click", () => {
+    const nameInput = document.getElementById("routeName");
+    const name = nameInput.value.trim() || `Route ${savedRoutes.length + 1}`;
+    savedRoutes.push({
+      id: "r" + Date.now().toString(36),
+      name,
+      systemId: state.systemId,
+      routeId: state.routeId === "all" ? (system().routes[0] || {}).id : state.routeId,
+      stopId: state.stopId,
+      walkMinutes: state.walkMinutes,
+      watch: false, watchMinutes: 10, alertedKey: null,
+    });
+    nameInput.value = "";
+    persistRoutes();
+    renderRoutes();
+  });
+  const banner = document.getElementById("watchBanner");
+  document.getElementById("watchBannerClose").addEventListener("click", (e) => {
+    e.stopPropagation();
+    banner.hidden = true;
+  });
+  banner.addEventListener("click", () => {
+    const r = savedRoutes.find((x) => x.id === banner.dataset.routeId);
+    banner.hidden = true;
+    if (r) loadRoute(r);
+  });
+}
+
+// Every arrival refresh, check watched routes: if it's time to leave for
+// one, fire a banner + voice alert (once per arrival).
+async function checkWatchers() {
+  let best = null;
+  for (const r of savedRoutes) {
+    if (!r.watch) continue;
+    const sys = TRANSIT_SYSTEMS.find((s) => s.id === r.systemId);
+    if (!sys) continue;
+    let arrivals = [];
+    try { arrivals = await sys.getArrivals(r.stopId); } catch (e) { continue; }
+    const next = arrivals
+      .filter((a) => a.route === r.routeId)
+      .sort((a, b) => a.minutesAway - b.minutesAway)[0];
+    if (!next) { r.alertedKey = null; continue; }
+    const leaveIn = next.minutesAway - r.walkMinutes - BUFFER_MINUTES;
+    const key = `${r.routeId}|${r.stopId}|${Math.ceil(next.minutesAway)}`;
+    if (leaveIn <= r.watchMinutes && leaveIn >= 0 && r.alertedKey !== key) {
+      r.alertedKey = key;
+      if (!best || leaveIn < best.leaveIn) best = { route: r, leaveIn, next };
+    } else if (leaveIn > r.watchMinutes || leaveIn < 0) {
+      r.alertedKey = null;
+    }
+  }
+  persistRoutes();
+  if (best) fireWatchAlert(best);
+}
+
+function fireWatchAlert({ route: r, leaveIn, next }) {
+  const sys = TRANSIT_SYSTEMS.find((s) => s.id === r.systemId);
+  const rt = (sys && sys.routes.find((x) => x.id === r.routeId)) || {};
+  const icon = MODE_ICON[rt.mode] || "🚌";
+  const spoken = rt.mode === "bus" ? `route ${r.routeId}` : `the ${rt.name || r.routeId}`;
+  const text = leaveIn <= 0
+    ? `${icon} ${r.name}: LEAVE NOW — ${spoken} to ${next.destination}!`
+    : `${icon} ${r.name}: leave in ${Math.ceil(leaveIn)} min — ${spoken} to ${next.destination}`;
+  const banner = document.getElementById("watchBanner");
+  document.getElementById("watchBannerText").textContent = text;
+  banner.dataset.routeId = r.id;
+  banner.hidden = false;
+  clearTimeout(fireWatchAlert._t);
+  fireWatchAlert._t = setTimeout(() => { banner.hidden = true; }, 15000);
+  speak(leaveIn <= 0
+    ? `Time to leave! ${r.name}: catch ${spoken} to ${next.destination}.`
+    : `${r.name}: leave in ${Math.ceil(leaveIn)} minutes to catch ${spoken} to ${next.destination}.`);
+}
+
 // ---------------- place search (Nominatim, free, no key) ----------------
 let searchTimer = null;
 
@@ -847,6 +1008,7 @@ function init() {
   initPanel();
   initTransportFilter();
   initFollowCard();
+  initRoutes();
   fillRoutes();
   fillStops();
   renderStopMarkers();

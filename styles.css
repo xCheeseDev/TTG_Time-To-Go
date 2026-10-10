@@ -128,6 +128,89 @@ html, body {
   white-space: nowrap;
 }
 
+/* ---- saved routes (v5) ---- */
+.route-save-row { display: flex; gap: 8px; margin: 8px 0; }
+.route-save-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid #274a30;
+  background: #0e1a12;
+  color: #eaf5ec;
+  font-size: 0.95rem;
+}
+.route-save-row button { margin-top: 0; white-space: nowrap; }
+.watch-default {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: #9fd3ab;
+  margin: 4px 0 8px;
+}
+.watch-default input {
+  width: 56px;
+  padding: 6px;
+  border-radius: 8px;
+  border: 1px solid #274a30;
+  background: #0e1a12;
+  color: #eaf5ec;
+  font-size: 0.95rem;
+}
+.route-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #274a30;
+  border-radius: 10px;
+  margin-bottom: 8px;
+  background: #101d14;
+}
+.route-item-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.route-item-main b { font-size: 0.95rem; }
+.route-item-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.route-item-actions button {
+  margin-top: 0;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+}
+.route-item-actions button[aria-pressed="true"] { background: #b8860b; }
+.route-item-actions button.danger { background: #5a1414; }
+
+/* ---- watcher alert banner ---- */
+.watch-banner {
+  position: fixed;
+  top: 76px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(560px, calc(100vw - 24px));
+  background: #1c7a34;
+  color: #fff;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+.watch-banner[hidden] { display: none; }
+.watch-banner button {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 /* ---- LIVE vehicle camera-follow card ---- */
 .follow-card {
   position: fixed;
