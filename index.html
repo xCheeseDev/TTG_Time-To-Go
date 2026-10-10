@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TTG — Time To Go</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="map"></div>
+
+  <!-- Google-Maps-style search bar -->
+  <div class="search-bar">
+    <span class="logo">TTG</span>
+    <input id="searchInput" type="text" placeholder="Search places or stops…" autocomplete="off">
+    <button id="searchBtn" aria-label="Search">🔍</button>
+    <div id="searchResults" class="search-results" hidden></div>
+  </div>
+
+  <button id="locateBtn" class="fab" aria-label="My location" title="My location">📍</button>
+
+  <!-- Trip controls live in a bottom sheet, map stays the hero -->
+  <div class="trip-panel" id="tripPanel">
+    <button id="panelToggle" class="panel-toggle" aria-label="Collapse panel">▾</button>
+    <div class="panel-body">
+      <section class="card" id="setup">
+        <h2>Your trip</h2>
+        <label>
+          Transit system
+          <select id="systemSelect"></select>
+        </label>
+        <label>
+          The bus or train you need
+          <select id="routeSelect"></select>
+        </label>
+        <label>
+          Your stop / station
+          <select id="stopSelect"></select>
+        </label>
+        <label>
+          Minutes to walk to the stop
+          <input type="number" id="walkMinutes" min="1" max="60" value="8">
+        </label>
+        <button id="voiceBtn">🔇 Enable voice announcements</button>
+      </section>
+
+      <section class="card" id="nextBus">
+        <h2>Next arrival</h2>
+        <div id="busInfo"><p>Loading…</p></div>
+        <div id="leaveBadge" class="leave-badge waiting">—</div>
+        <p class="hint">TTG subtracts your walk time (+ a 2-minute safety buffer) from the arrival time, then tells you exactly when to leave the house.</p>
+        <button id="demoBtn" class="secondary">Demo: 1 min closer</button>
+      </section>
+
+      <section class="card" id="videoFeed">
+        <h2>Live stop camera</h2>
+        <div id="cameraBox" class="camera-placeholder">
+          <p>📷 No live camera linked for this stop yet.</p>
+          <p class="small">Where a camera feed exists for your stop or station, it appears here — synced to your location so you can watch your ride roll in, truly live.</p>
+        </div>
+      </section>
+
+      <p class="small muted">Map data © OpenStreetMap contributors · TTG v2 — arrival data is simulated until real transit feeds are plugged in.</p>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

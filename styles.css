@@ -1,0 +1,246 @@
+/* TTG v2 — map-first. Full-screen Leaflet map, Google-Maps-style chrome. */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #0e1a12;
+  color: #eaf5ec;
+}
+
+#map {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+/* ---- floating search bar ---- */
+.search-bar {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(560px, calc(100vw - 24px));
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 6px 6px 14px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+}
+.search-bar .logo {
+  font-weight: 800;
+  color: #1c7a34;
+  font-size: 1.05rem;
+  letter-spacing: 0.5px;
+}
+.search-bar input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 1rem;
+  background: transparent;
+  color: #222;
+  min-width: 0;
+}
+.search-bar button {
+  border: none;
+  background: #1c7a34;
+  color: #fff;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  font-size: 1.1rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.search-bar button:hover { background: #259a42; }
+
+.search-results {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  color: #222;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.search-item {
+  padding: 10px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid #eee;
+  font-size: 0.9rem;
+}
+.search-item:hover { background: #f2f7f3; }
+.search-item .muted { color: #777; font-size: 0.8rem; }
+
+/* ---- floating action button ---- */
+.fab {
+  position: fixed;
+  right: 16px;
+  top: 76px;
+  z-index: 1000;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: #fff;
+  font-size: 1.4rem;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+.fab:hover { background: #f2f7f3; }
+
+/* ---- map markers ---- */
+.stop-marker {
+  font-size: 22px;
+  text-align: center;
+  line-height: 30px;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+}
+.stop-marker.selected { transform: scale(1.35); }
+.user-marker {
+  background: #1a73e8;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 6px rgba(26, 115, 232, 0.25);
+}
+.popup-btn {
+  margin-top: 6px;
+  background: #1c7a34;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+/* ---- bottom sheet ---- */
+.trip-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  max-height: 46dvh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(14, 26, 18, 0.96);
+  border-top: 2px solid #1c7a34;
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+  transition: transform 0.25s ease;
+}
+.trip-panel.collapsed { transform: translateY(calc(100% - 44px)); }
+.panel-toggle {
+  height: 44px;
+  background: transparent;
+  border: none;
+  color: #9fd3ab;
+  font-size: 1.3rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.panel-body {
+  overflow-y: auto;
+  padding: 0 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+/* ---- cards (kept from v1, adapted) ---- */
+.card {
+  width: min(560px, 100%);
+  background: #16241a;
+  border: 1px solid #274a30;
+  border-radius: 14px;
+  padding: 16px;
+}
+.card h2 { margin: 0 0 10px; font-size: 1.05rem; color: #9fd3ab; }
+.card label { display: block; margin: 8px 0; font-size: 0.9rem; }
+.card select, .card input[type="number"] {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid #274a30;
+  background: #0e1a12;
+  color: #eaf5ec;
+  font-size: 1rem;
+}
+.card button {
+  background: #1c7a34;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 1rem;
+  cursor: pointer;
+  margin-top: 8px;
+}
+.card button:hover { background: #259a42; }
+.card button.secondary { background: #274a30; }
+
+#busInfo .route { font-size: 1.15rem; font-weight: 700; margin: 4px 0; }
+#busInfo .eta { color: #9fd3ab; margin: 4px 0; }
+
+.leave-badge {
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 800;
+  padding: 12px;
+  border-radius: 10px;
+  margin: 10px 0;
+}
+.leave-badge.waiting { background: #1a2b1f; color: #9fd3ab; }
+.leave-badge.soon { background: #4a3a12; color: #ffd54a; }
+.leave-badge.now {
+  background: #5a1414;
+  color: #ff6b6b;
+  animation: pulse 1s infinite;
+}
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+
+.hint, .small { font-size: 0.85rem; color: #9fd3ab; }
+.muted { color: #6f8a76; }
+
+.camera-placeholder {
+  border: 1px dashed #274a30;
+  border-radius: 10px;
+  padding: 16px;
+  text-align: center;
+}
+#cameraBox video { width: 100%; border-radius: 10px; }
+
+/* desktop: panel becomes a side sheet */
+@media (min-width: 900px) {
+  .trip-panel {
+    left: auto;
+    top: 76px;
+    bottom: 16px;
+    width: 380px;
+    right: 16px;
+    border-radius: 18px;
+    border: 2px solid #1c7a34;
+    max-height: none;
+  }
+  .trip-panel.collapsed { transform: translateX(calc(100% - 44px)); }
+  .fab { right: auto; left: 16px; }
+}
