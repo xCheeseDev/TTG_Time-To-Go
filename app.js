@@ -1,5 +1,5 @@
 // ============================================================
-// TTG — Time To Go (v2, map-first)
+// TTG — Time To Go (v4: map-first + live vehicles + camera follow)
 //
 // PURPOSE:
 //   Show you the incoming bus or train you need to take, verbally

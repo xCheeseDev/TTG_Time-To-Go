@@ -32,4 +32,4 @@ python3 -m http.server 8000
 
 ## Status
 
-v2. Arrival and vehicle-position data is simulated until real transit feeds are plugged in. Next: wire a real GTFS-realtime feed for your city.
+v4. Map-first UI with live vehicle icons, a transport-type filter, and tap-to-watch camera follow with automatic camera handoff. Arrival, vehicle-position, and camera data is simulated until real transit feeds are plugged in. Next: wire a real GTFS-realtime feed for your city.
