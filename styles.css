@@ -122,6 +122,59 @@ html, body {
   white-space: nowrap;
 }
 
+/* ---- LIVE vehicle camera-follow card ---- */
+.follow-card {
+  position: fixed;
+  top: 140px;
+  right: 16px;
+  z-index: 1000;
+  width: min(320px, calc(100vw - 32px));
+  background: rgba(14, 26, 18, 0.97);
+  border: 1px solid #274a30;
+  border-radius: 14px;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+.follow-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.live-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ff3b30;
+  animation: pulse 1s infinite;
+  flex-shrink: 0;
+}
+.follow-close {
+  margin-left: auto;
+  background: transparent;
+  border: none;
+  color: #9fd3ab;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+#followCanvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #222;
+}
+.follow-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+}
+
 /* ---- transport filter: circle that expands into a bar ---- */
 .transport-wrap {
   position: fixed;

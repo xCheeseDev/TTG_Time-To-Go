@@ -20,6 +20,20 @@
 
   <button id="locateBtn" class="fab" aria-label="My location" title="My location">📍</button>
 
+  <!-- LIVE vehicle camera-follow card: tap any vehicle icon to watch it -->
+  <div id="followCard" class="follow-card" hidden>
+    <div class="follow-head">
+      <span class="live-dot"></span>
+      <span id="followTitle">LIVE</span>
+      <button id="followClose" class="follow-close" aria-label="Stop watching">✕</button>
+    </div>
+    <canvas id="followCanvas" width="300" height="170"></canvas>
+    <div class="follow-foot">
+      <span id="followVehicle"></span>
+      <span id="followCam" class="muted"></span>
+    </div>
+  </div>
+
   <!-- Method-of-transport filter: small circle that expands into a toggle bar -->
   <div class="transport-wrap">
     <div id="transportBar" class="transport-bar" role="group" aria-label="Show or hide vehicle types">

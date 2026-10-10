@@ -77,6 +77,10 @@ const TRANSIT_SYSTEMS = [
     async getCameraUrl(stopId) {
       return null;
     },
+    // TODO: return this agency's real traffic/station camera positions.
+    async getTrafficCameras() {
+      return DEMO_CAMERAS.map((c) => ({ ...c }));
+    },
   },
 
   // ---- How a real major system plugs in (example) ----
@@ -412,9 +416,10 @@ function spawnFleet() {
       const label = route.mode === "bus" ? `Route ${route.name.replace("Route ", "")}` : route.name;
       v.marker = L.marker([pB[0], pB[1]], {
         icon: vehicleIcon(routeId, route.mode),
-        title: `${label} — live`,
+        title: `${label} — tap for live camera`,
         zIndexOffset: 500,
-      }).bindPopup(`<b>${MODE_ICON[route.mode] || "🚌"} ${label}</b><br><span class="muted">Live position · simulated feed</span>`);
+      });
+      v.marker.on("click", () => openFollowCard(v));
       fleet.push(v);
     }
   });
@@ -447,7 +452,12 @@ function renderVehicles() {
     alpha = Math.min(alpha, 1.5); // dead-reckon briefly past the last fix, then hold
     const lat = v.fixA.lat + (v.fixB.lat - v.fixA.lat) * alpha;
     const lng = v.fixA.lng + (v.fixB.lng - v.fixA.lng) * alpha;
+    v.rendered = [lat, lng];
     v.marker.setLatLng([lat, lng]);
+  }
+  if (follow.vehicle) {
+    checkCameraHandoff(now);
+    drawFollowFrame(now);
   }
   requestAnimationFrame(renderVehicles);
 }
@@ -460,11 +470,14 @@ function applyVehicleVisibility() {
     if (show && !onMap) v.marker.addTo(map);
     if (!show && onMap) map.removeLayer(v.marker);
   });
+  if (follow.vehicle && !vehicleModes[follow.vehicle.mode]) closeFollowCard();
 }
 
 function initVehicleLayer() {
   spawnFleet();
   pollVehicleFeed(); // first real fix immediately so nothing sits still
+  preloadSprites();
+  refreshTrafficCameras();
   renderVehicles();
   setInterval(pollVehicleFeed, TRACK_INTERVAL_MS);
 }
@@ -485,6 +498,192 @@ function initTransportFilter() {
       applyVehicleVisibility();
     });
   });
+}
+
+// ---------------- traffic cameras + LIVE vehicle follow ----------------
+// Clicking a vehicle icon opens a LIVE follow card showing that vehicle's
+// camera feed. The app "scours" the transit system's traffic/station
+// cameras (via getTrafficCameras()), picks the one nearest the vehicle,
+// and hands off to the next camera as the vehicle drives out of range —
+// like watching it pass from camera to camera.
+//
+// Demo feeds are simulated on a canvas (watermarked SIMULATED FEED). A
+// real agency would return stream URLs from getTrafficCameras() and the
+// card would play them in a <video> element instead.
+const DEMO_CAMERAS = [
+  { id: "cam-cat",  name: "Plaça de Catalunya", lat: 41.3874, lng: 2.1686 },
+  { id: "cam-eix",  name: "Gran Via / Eixample", lat: 41.3935, lng: 2.1695 },
+  { id: "cam-sag",  name: "Sagrada Família",    lat: 41.4036, lng: 2.1744 },
+  { id: "cam-pob",  name: "Poblenou",           lat: 41.3820, lng: 2.1780 },
+  { id: "cam-bar",  name: "Barceloneta",        lat: 41.3755, lng: 2.1900 },
+  { id: "cam-gra",  name: "Gràcia",             lat: 41.3960, lng: 2.1630 },
+  { id: "cam-gue",  name: "Park Güell",         lat: 41.4145, lng: 2.1527 },
+  { id: "cam-san",  name: "Sants",              lat: 41.3850, lng: 2.1520 },
+  { id: "cam-les",  name: "Les Corts",          lat: 41.3825, lng: 2.1370 },
+  { id: "cam-camp", name: "Camp Nou",           lat: 41.3809, lng: 2.1228 },
+];
+const HANDOFF_RADIUS_M = 600; // switch cameras when the vehicle leaves this range
+const MODE_TO_IMGKEY = { bus: "bus", subway: "metro", train: "train", tram: "tram" };
+
+let trafficCameras = [];
+const follow = { vehicle: null, camera: null, camSince: 0, handoffAt: 0, lastCheck: 0 };
+const spriteImgs = {};
+
+async function refreshTrafficCameras() {
+  try {
+    trafficCameras = (await system().getTrafficCameras()) || [];
+  } catch (e) {
+    console.warn("Traffic camera fetch failed:", e);
+    trafficCameras = [];
+  }
+}
+
+function nearestCamera(lat, lng) {
+  let best = null, bestD = Infinity;
+  for (const c of trafficCameras) {
+    const d = haversineM([lat, lng], [c.lat, c.lng]);
+    if (d < bestD) { bestD = d; best = c; }
+  }
+  return bestD <= HANDOFF_RADIUS_M ? best : null;
+}
+
+function preloadSprites() {
+  Object.entries(MODE_TO_IMGKEY).forEach(([mode, key]) => {
+    const img = new Image();
+    img.src = VEHICLE_IMG[key];
+    spriteImgs[mode] = img;
+  });
+}
+
+function updateFollowTitle() {
+  const title = document.getElementById("followTitle");
+  const sub = document.getElementById("followCam");
+  if (follow.camera) {
+    title.textContent = `LIVE · ${follow.camera.name}`;
+    sub.textContent = "traffic camera";
+  } else {
+    title.textContent = "LIVE · no camera in range";
+    sub.textContent = "following on map until coverage resumes";
+  }
+}
+
+function openFollowCard(v) {
+  follow.vehicle = v;
+  const pos = v.rendered || [v.fixB.lat, v.fixB.lng];
+  follow.camera = nearestCamera(pos[0], pos[1]);
+  follow.camSince = Date.now();
+  follow.handoffAt = 0;
+  const route = routeById(v.routeId);
+  const label = route.mode === "bus" ? `Route ${route.name.replace("Route ", "")}` : route.name;
+  document.getElementById("followVehicle").textContent =
+    `${MODE_ICON[route.mode] || "🚌"} ${label}`;
+  document.getElementById("followCard").hidden = false;
+  updateFollowTitle();
+}
+
+function closeFollowCard() {
+  follow.vehicle = null;
+  follow.camera = null;
+  document.getElementById("followCard").hidden = true;
+}
+
+// Throttled: re-scour cameras a couple of times a second and hand off
+// when a nearer camera takes over (or coverage drops out).
+function checkCameraHandoff(now) {
+  const v = follow.vehicle;
+  if (!v || !v.rendered || now - follow.lastCheck < 700) return;
+  follow.lastCheck = now;
+  const cam = nearestCamera(v.rendered[0], v.rendered[1]);
+  const changed = (cam && !follow.camera) || (!cam && follow.camera) ||
+    (cam && follow.camera && cam.id !== follow.camera.id);
+  if (changed) {
+    follow.camera = cam;
+    follow.camSince = now;
+    follow.handoffAt = now;
+    updateFollowTitle();
+  }
+}
+
+function drawFollowFrame(now) {
+  const v = follow.vehicle;
+  if (!v) return;
+  const canvas = document.getElementById("followCanvas");
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+
+  // --- street scene ---
+  const sky = ctx.createLinearGradient(0, 0, 0, H * 0.55);
+  sky.addColorStop(0, "#8fb8dd"); sky.addColorStop(1, "#d9e9f4");
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, H * 0.55);
+  const seed = follow.camera
+    ? [...follow.camera.id].reduce((a, c) => a + c.charCodeAt(0), 0) : 7;
+  let bx = 0, i = 0;
+  while (bx < W) {
+    const bw = 34 + ((seed * (i + 3) * 37) % 30);
+    const bh = H * (0.18 + ((seed * (i + 5) * 53) % 20) / 100);
+    ctx.fillStyle = "#93a3b5";
+    ctx.fillRect(bx, H * 0.55 - bh, bw, bh);
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    for (let wy = H * 0.55 - bh + 6; wy < H * 0.55 - 8; wy += 10)
+      for (let wx = bx + 5; wx < bx + bw - 6; wx += 10) ctx.fillRect(wx, wy, 5, 6);
+    bx += bw + 6; i++;
+  }
+  ctx.fillStyle = "#3a3f46"; ctx.fillRect(0, H * 0.55, W, H * 0.45);
+  ctx.fillStyle = "#f2c14e"; ctx.fillRect(0, H * 0.55, W, 3);
+  ctx.fillStyle = "rgba(255,255,255,0.75)";
+  for (let x = 8; x < W; x += 44) ctx.fillRect(x, H * 0.55 + H * 0.24, 24, 3);
+
+  const img = spriteImgs[v.mode];
+  const iw = 120;
+  const ih = img && img.naturalWidth ? (iw * img.naturalHeight) / img.naturalWidth : 80;
+  const iy = H * 0.55 + H * 0.45 - ih - 8;
+
+  if (!follow.camera) {
+    ctx.fillStyle = "rgba(10,15,20,0.55)"; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#ffd54a"; ctx.font = "bold 13px system-ui"; ctx.textAlign = "center";
+    ctx.fillText("📷 no traffic camera in range", W / 2, H / 2 - 6);
+    ctx.fillStyle = "#9fd3ab"; ctx.font = "11px system-ui";
+    ctx.fillText("following on map until coverage resumes", W / 2, H / 2 + 12);
+  } else {
+    const period = 5000; // one drive-past per camera view
+    const t = ((now - follow.camSince) % period) / period;
+    if (img && img.complete && img.naturalWidth) {
+      if (v.dir >= 0) {
+        ctx.drawImage(img, -iw + t * (W + 2 * iw), iy, iw, ih);
+      } else {
+        const xm = (W + iw) - t * (W + 2 * iw);
+        ctx.save();
+        ctx.translate(xm + iw, 0); ctx.scale(-1, 1);
+        ctx.drawImage(img, 0, iy, iw, ih);
+        ctx.restore();
+      }
+    }
+    if (now - follow.handoffAt < 700) {
+      ctx.fillStyle = "rgba(10,15,20,0.6)"; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = "#fff"; ctx.font = "bold 13px system-ui"; ctx.textAlign = "center";
+      ctx.fillText("📡 switching camera…", W / 2, H / 2);
+    }
+  }
+
+  // --- overlays ---
+  const ts = new Date(now), pad = (n) => String(n).padStart(2, "0");
+  ctx.textAlign = "left"; ctx.font = "bold 11px system-ui";
+  ctx.fillStyle = "#ff3b30";
+  ctx.beginPath(); ctx.arc(12, 14, 5, 0, 7); ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.fillText("LIVE", 22, 18);
+  ctx.textAlign = "right"; ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.fillText(`${pad(ts.getHours())}:${pad(ts.getMinutes())}:${pad(ts.getSeconds())}`, W - 8, 18);
+  const tag = "SIMULATED FEED";
+  ctx.font = "9px system-ui";
+  const tw = ctx.measureText(tag).width;
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillRect(W - tw - 14, H - 20, tw + 8, 14);
+  ctx.fillStyle = "#ffd54a";
+  ctx.fillText(tag, W - 10, H - 9);
+}
+
+function initFollowCard() {
+  document.getElementById("followClose").addEventListener("click", closeFollowCard);
 }
 
 // ---------------- place search (Nominatim, free, no key) ----------------
@@ -589,6 +788,7 @@ function init() {
     fillRoutes();
     fillStops();
     renderStopMarkers();
+    refreshTrafficCameras();
     loadCameraFeed();
     refreshArrivals();
   });
@@ -629,6 +829,7 @@ function init() {
   initSearch();
   initPanel();
   initTransportFilter();
+  initFollowCard();
   fillRoutes();
   fillStops();
   renderStopMarkers();
