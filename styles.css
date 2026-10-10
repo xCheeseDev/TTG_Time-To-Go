@@ -101,6 +101,91 @@ html, body {
 }
 .fab:hover { background: #f2f7f3; }
 
+/* ---- live vehicle markers ---- */
+.vehicle { position: relative; }
+.vehicle img {
+  display: block;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
+}
+.vehicle-badge {
+  position: absolute;
+  right: -6px;
+  bottom: -4px;
+  background: #12241a;
+  color: #9fd3ab;
+  border: 1px solid #1c7a34;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* ---- transport filter: circle that expands into a bar ---- */
+.transport-wrap {
+  position: fixed;
+  left: 16px;
+  bottom: 64px; /* sits just above the collapsed trip panel */
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.transport-fab {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  background: #fff;
+  font-size: 1.5rem;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  flex-shrink: 0;
+}
+.transport-fab:hover { background: #f2f7f3; }
+.transport-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(14, 26, 18, 0.96);
+  border: 1px solid #274a30;
+  border-radius: 999px;
+  padding: 6px 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width 0.28s ease, opacity 0.22s ease, padding 0.28s ease;
+  pointer-events: none;
+}
+.transport-bar.open {
+  max-width: 480px;
+  opacity: 1;
+  pointer-events: auto;
+}
+.transport-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #1c7a34;
+  background: #1c7a34;
+  color: #fff;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.transport-chip span { font-size: 0.8rem; }
+.transport-chip[aria-pressed="false"] {
+  background: transparent;
+  color: #6f8a76;
+  border-color: #274a30;
+  opacity: 0.65;
+}
+
 /* ---- map markers ---- */
 .stop-marker {
   font-size: 22px;

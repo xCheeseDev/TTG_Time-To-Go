@@ -30,7 +30,7 @@
 
 const BUFFER_MINUTES = 2; // safety buffer so you never miss it
 
-const MODE_ICON = { bus: "🚌", subway: "🚇", train: "🚆" };
+const MODE_ICON = { bus: "🚌", subway: "🚇", train: "🚆", tram: "🚋" };
 const DEFAULT_CENTER = [41.3874, 2.1686]; // Barcelona
 
 // --- Simulated arrivals for the demo system (replace per city) ---
@@ -41,6 +41,7 @@ const DEMO_ARRIVALS = [
   { route: "red", destination: "Northgate",    minutesAway: 6  },
   { route: "red", destination: "South End",    minutesAway: 16 },
   { route: "lw",  destination: "Union Station", minutesAway: 35 },
+  { route: "t1",  destination: "Barceloneta", minutesAway: 11 },
 ];
 
 const TRANSIT_SYSTEMS = [
@@ -50,13 +51,19 @@ const TRANSIT_SYSTEMS = [
     city: "Demo City",
     country: "—",
     routes: [
-      { id: "10",  name: "Route 10",      mode: "bus"    },
-      { id: "42",  name: "Route 42",      mode: "bus"    },
-      { id: "red", name: "Red Line",      mode: "subway" },
-      { id: "lw",  name: "Lakeshore West", mode: "train" },
+      { id: "10",  name: "Route 10",      mode: "bus",
+        path: [[41.3874,2.1686],[41.3935,2.1695],[41.3990,2.1715],[41.4036,2.1744]] },
+      { id: "42",  name: "Route 42",      mode: "bus",
+        path: [[41.3874,2.1686],[41.3820,2.1780],[41.3780,2.1850],[41.3755,2.1900]] },
+      { id: "red", name: "Red Line",      mode: "subway",
+        path: [[41.3874,2.1686],[41.3960,2.1630],[41.4060,2.1570],[41.4145,2.1527]] },
+      { id: "lw",  name: "Lakeshore West", mode: "train",
+        path: [[41.3874,2.1686],[41.3850,2.1520],[41.3825,2.1370],[41.3809,2.1228]] },
+      { id: "t1",  name: "T1 Tramvia",    mode: "tram",
+        path: [[41.3874,2.1686],[41.3800,2.1760],[41.3755,2.1900]] },
     ],
     stops: [
-      { id: "demo-100", name: "Plaça de Catalunya", routes: ["10", "42", "red", "lw"], lat: 41.3874, lng: 2.1686 },
+      { id: "demo-100", name: "Plaça de Catalunya", routes: ["10", "42", "red", "lw", "t1"], lat: 41.3874, lng: 2.1686 },
       { id: "demo-200", name: "Sagrada Família",    routes: ["10"],                   lat: 41.4036, lng: 2.1744 },
       { id: "demo-300", name: "Barceloneta Beach",  routes: ["42"],                   lat: 41.3755, lng: 2.1900 },
       { id: "demo-400", name: "Park Güell",         routes: ["red"],                  lat: 41.4145, lng: 2.1527 },
@@ -238,6 +245,7 @@ function initMap() {
   }).addTo(map);
 
   renderStopMarkers();
+  initVehicleLayer();
   locateUser(false);
 
   document.getElementById("locateBtn").addEventListener("click", () => locateUser(true));
@@ -302,6 +310,181 @@ function locateUser(announce) {
     },
     { enableHighAccuracy: true, timeout: 10000 }
   );
+}
+
+// ---------------- live vehicle tracking ----------------
+// Shows live bus/train/metro/tram icons driving around the map.
+//
+// How the smoothness works: real trackers (GTFS-RT vehicle positions,
+// agency APIs) only emit a new position roughly every 30 seconds. If we
+// just jumped each icon fix-to-fix, motion would look like teleporting.
+// Instead this layer keeps each vehicle's last TWO fixes and
+// interpolates between them every animation frame, so icons glide at a
+// constant smooth speed. If a poll is late, it dead-reckons a little
+// past the last fix along the same heading, then holds.
+//
+// The demo "feed" below simulates those 30s polls. When a real agency
+// feed is plugged in, only pollVehicleFeed() changes — the
+// interpolation layer works identically on real fixes.
+const TRACK_INTERVAL_MS = 30000; // real trackers poll ~every 30s
+
+const VEHICLE_ICON = {
+  bus:    { src: () => VEHICLE_IMG.bus,   size: [64, 44] },
+  subway: { src: () => VEHICLE_IMG.metro, size: [77, 44] },
+  train:  { src: () => VEHICLE_IMG.train, size: [56, 44] },
+  tram:   { src: () => VEHICLE_IMG.tram,  size: [64, 44] },
+};
+
+// Modes the user wants to see; persisted so it survives reloads.
+let vehicleModes = (() => {
+  const defaults = { bus: true, subway: true, train: true, tram: true };
+  try {
+    const saved = JSON.parse(localStorage.getItem("ttg-vehicle-modes"));
+    if (saved) return { ...defaults, ...saved };
+  } catch (e) { /* corrupted storage -> defaults */ }
+  return defaults;
+})();
+
+// Ground-truth simulation standing in for a real agency feed.
+// Each entry: { id, routeId, mode, path, cum, total, dist, dir, speed,
+//               marker, fixA, fixB }
+const fleet = [];
+
+function haversineM(a, b) {
+  const R = 6371000, toRad = Math.PI / 180;
+  const dLat = (b[0] - a[0]) * toRad, dLng = (b[1] - a[1]) * toRad;
+  const s = Math.sin(dLat / 2) ** 2 +
+    Math.cos(a[0] * toRad) * Math.cos(b[0] * toRad) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+// Position at `d` meters along a path (with cumulative segment lengths).
+function pointAtDistance(path, cum, d) {
+  d = Math.max(0, Math.min(cum[cum.length - 1], d));
+  let i = 1;
+  while (i < cum.length - 1 && cum[i] < d) i++;
+  const segLen = cum[i] - cum[i - 1] || 1;
+  const t = (d - cum[i - 1]) / segLen;
+  const a = path[i - 1], b = path[i];
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+}
+
+function vehicleIcon(routeId, mode) {
+  const cfg = VEHICLE_ICON[mode] || VEHICLE_ICON.bus;
+  return L.divIcon({
+    className: "vehicle",
+    html: `<img src="${cfg.src()}" alt="${mode}" style="width:${cfg.size[0]}px;height:${cfg.size[1]}px">` +
+          `<span class="vehicle-badge">${routeId}</span>`,
+    iconSize: [cfg.size[0], cfg.size[1]],
+    iconAnchor: [cfg.size[0] / 2, cfg.size[1] / 2],
+  });
+}
+
+function spawnFleet() {
+  // routeId, how many vehicles, cruising speed (m/s)
+  const specs = [
+    { routeId: "10",  count: 2, speed: 8 },
+    { routeId: "42",  count: 2, speed: 8 },
+    { routeId: "red", count: 2, speed: 12 },
+    { routeId: "lw",  count: 2, speed: 16 },
+    { routeId: "t1",  count: 2, speed: 7 },
+  ];
+  const now = Date.now();
+  specs.forEach(({ routeId, count, speed }) => {
+    const route = routeById(routeId);
+    if (!route.path) return;
+    const path = route.path;
+    const cum = [0];
+    for (let i = 1; i < path.length; i++) cum.push(cum[i - 1] + haversineM(path[i - 1], path[i]));
+    const total = cum[cum.length - 1];
+    for (let n = 0; n < count; n++) {
+      const dist = (total * (n + 0.5)) / count; // spread along the line
+      const dir = n % 2 === 0 ? 1 : -1;
+      const pB = pointAtDistance(path, cum, dist);
+      const pA = pointAtDistance(path, cum, dist - dir * speed * (TRACK_INTERVAL_MS / 1000));
+      const v = {
+        id: `${routeId}-${n}`, routeId, mode: route.mode,
+        path, cum, total, dist, dir, speed,
+        fixA: { lat: pA[0], lng: pA[1], t: now - TRACK_INTERVAL_MS },
+        fixB: { lat: pB[0], lng: pB[1], t: now },
+        marker: null,
+      };
+      const label = route.mode === "bus" ? `Route ${route.name.replace("Route ", "")}` : route.name;
+      v.marker = L.marker([pB[0], pB[1]], {
+        icon: vehicleIcon(routeId, route.mode),
+        title: `${label} — live`,
+        zIndexOffset: 500,
+      }).bindPopup(`<b>${MODE_ICON[route.mode] || "🚌"} ${label}</b><br><span class="muted">Live position · simulated feed</span>`);
+      fleet.push(v);
+    }
+  });
+  applyVehicleVisibility();
+}
+
+// One "poll" of the (simulated) tracking feed: advance every vehicle's
+// ground truth by a full interval and emit a fresh fix, exactly like a
+// real API returning new vehicle positions.
+function pollVehicleFeed() {
+  const now = Date.now();
+  fleet.forEach((v) => {
+    v.dist += v.dir * v.speed * (TRACK_INTERVAL_MS / 1000);
+    if (v.dist >= v.total) { v.dist = 2 * v.total - v.dist; v.dir = -1; } // ping-pong
+    if (v.dist <= 0)       { v.dist = -v.dist;               v.dir = 1; }
+    const [lat, lng] = pointAtDistance(v.path, v.cum, v.dist);
+    v.fixA = v.fixB;
+    v.fixB = { lat, lng, t: now };
+  });
+}
+
+// Every animation frame: place each icon by interpolating between its
+// last two fixes. Constant speed, zero jumping.
+function renderVehicles() {
+  const now = Date.now();
+  for (const v of fleet) {
+    if (!v.marker || !vehicleModes[v.mode]) continue;
+    const dt = v.fixB.t - v.fixA.t;
+    let alpha = dt > 0 ? (now - v.fixA.t) / dt : 1;
+    alpha = Math.min(alpha, 1.5); // dead-reckon briefly past the last fix, then hold
+    const lat = v.fixA.lat + (v.fixB.lat - v.fixA.lat) * alpha;
+    const lng = v.fixA.lng + (v.fixB.lng - v.fixA.lng) * alpha;
+    v.marker.setLatLng([lat, lng]);
+  }
+  requestAnimationFrame(renderVehicles);
+}
+
+function applyVehicleVisibility() {
+  if (!map) return;
+  fleet.forEach((v) => {
+    const show = !!vehicleModes[v.mode];
+    const onMap = map.hasLayer(v.marker);
+    if (show && !onMap) v.marker.addTo(map);
+    if (!show && onMap) map.removeLayer(v.marker);
+  });
+}
+
+function initVehicleLayer() {
+  spawnFleet();
+  pollVehicleFeed(); // first real fix immediately so nothing sits still
+  renderVehicles();
+  setInterval(pollVehicleFeed, TRACK_INTERVAL_MS);
+}
+
+// ---------------- transport filter (circle -> expanding bar) ----------------
+function initTransportFilter() {
+  const fab = document.getElementById("transportFab");
+  const bar = document.getElementById("transportBar");
+  fab.addEventListener("click", () => bar.classList.toggle("open"));
+  bar.querySelectorAll(".transport-chip").forEach((chip) => {
+    const mode = chip.dataset.mode;
+    const sync = () => chip.setAttribute("aria-pressed", String(!!vehicleModes[mode]));
+    sync();
+    chip.addEventListener("click", () => {
+      vehicleModes[mode] = !vehicleModes[mode];
+      try { localStorage.setItem("ttg-vehicle-modes", JSON.stringify(vehicleModes)); } catch (e) {}
+      sync();
+      applyVehicleVisibility();
+    });
+  });
 }
 
 // ---------------- place search (Nominatim, free, no key) ----------------
@@ -445,6 +628,7 @@ function init() {
   initMap();
   initSearch();
   initPanel();
+  initTransportFilter();
   fillRoutes();
   fillStops();
   renderStopMarkers();

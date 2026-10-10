@@ -20,6 +20,17 @@
 
   <button id="locateBtn" class="fab" aria-label="My location" title="My location">📍</button>
 
+  <!-- Method-of-transport filter: small circle that expands into a toggle bar -->
+  <div class="transport-wrap">
+    <div id="transportBar" class="transport-bar" role="group" aria-label="Show or hide vehicle types">
+      <button class="transport-chip" data-mode="bus" aria-pressed="true">🚌<span>Bus</span></button>
+      <button class="transport-chip" data-mode="subway" aria-pressed="true">🚇<span>Metro</span></button>
+      <button class="transport-chip" data-mode="train" aria-pressed="true">🚆<span>Train</span></button>
+      <button class="transport-chip" data-mode="tram" aria-pressed="true">🚋<span>Tram</span></button>
+    </div>
+    <button id="transportFab" class="transport-fab" aria-label="Filter vehicles by transport type" title="Filter vehicles">🚏</button>
+  </div>
+
   <!-- Trip controls live in a bottom sheet, map stays the hero -->
   <div class="trip-panel" id="tripPanel">
     <button id="panelToggle" class="panel-toggle" aria-label="Collapse panel">▾</button>
@@ -61,11 +72,12 @@
         </div>
       </section>
 
-      <p class="small muted">Map data © OpenStreetMap contributors · TTG v2 — arrival data is simulated until real transit feeds are plugged in.</p>
+      <p class="small muted">Map data © OpenStreetMap contributors · TTG v2 — arrival + vehicle data is simulated until real transit feeds are plugged in.</p>
     </div>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="assets/vehicles.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
